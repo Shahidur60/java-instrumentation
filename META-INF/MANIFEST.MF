@@ -1,0 +1,15 @@
+Manifest-Version: 1.0
+Created-By: Maven Jar Plugin 3.2.0
+Build-Jdk-Spec: 17
+Class-Path: spring-boot-starter-3.1.0.jar spring-boot-3.1.0.jar spring-c
+ ontext-6.0.9.jar spring-aop-6.0.9.jar spring-beans-6.0.9.jar spring-exp
+ ression-6.0.9.jar spring-boot-autoconfigure-3.1.0.jar spring-boot-start
+ er-logging-3.1.0.jar logback-classic-1.4.7.jar logback-core-1.4.7.jar s
+ lf4j-api-2.0.7.jar log4j-to-slf4j-2.20.0.jar log4j-api-2.20.0.jar jul-t
+ o-slf4j-2.0.7.jar jakarta.annotation-api-2.1.1.jar spring-core-6.0.9.ja
+ r spring-jcl-6.0.9.jar snakeyaml-1.33.jar lombok-1.18.26.jar javassist-
+ 3.29.2-GA.jar byte-buddy-1.11.14.jar byte-buddy-agent-1.11.14.jar
+Implementation-Title: instrumentation
+Implementation-Version: 0.0.1-SNAPSHOT
+Main-Class: com.example.instrumentation.LoggingAgent
+
