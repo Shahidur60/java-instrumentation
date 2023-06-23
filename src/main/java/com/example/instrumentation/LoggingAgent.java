@@ -9,14 +9,10 @@ import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.lang.reflect.Modifier;
 import java.security.ProtectionDomain;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class LoggingAgent {
     private static final Map<String, List<String>> controlFlowPaths = new HashMap<>();
-
     public static void premain(String agentArgs, Instrumentation inst) {
         ClassPool pool = ClassPool.getDefault();
         ClassFileTransformer transformer = new ClassFileTransformer() {
@@ -64,47 +60,59 @@ public class LoggingAgent {
             }
 
             CodeIterator codeIterator = codeAttribute.iterator();
-            List<Integer> branchPositions = new ArrayList<>();
+            List<Integer> branchPositions = new  ArrayList<>();
             List<String> executingMethods = new ArrayList<>();
+            List<List<String>> branchExecutedMethods = new ArrayList<>();
+            List<Boolean> branchDecisions = new ArrayList<>();
+            List<Integer> jumpPositions = new ArrayList<>();
+
             while (codeIterator.hasNext()) {
                 int position = codeIterator.next();
                 int opcode = codeIterator.byteAt(position) & 0xFF;
 
                 if (Mnemonic.OPCODE[opcode].startsWith("if")) {
                     branchPositions.add(position);
+                    branchExecutedMethods.add(new ArrayList<>());
+                    int jumpPos = position + codeIterator.s16bitAt(position + 1);
+                    jumpPositions.add(jumpPos);
                 } else if (Mnemonic.OPCODE[opcode] == "invokevirtual" || Mnemonic.OPCODE[opcode] == "invokeinterface") {
                     int index = codeIterator.u16bitAt(position + 1);
                     ConstPool constPool = codeAttribute.getConstPool();
                     String className = constPool.getMethodrefClassName(index);
                     String methodName = constPool.getMethodrefName(index);
                     String executingMethod = className + "." + methodName;
-                    executingMethods.add(executingMethod);
+
+                    // Check if the executing method is already added
+                    if (!executingMethods.contains(executingMethod)) {
+                        executingMethods.add(executingMethod);
+                    }
                 }
             }
 
             if (!branchPositions.isEmpty()) {
-                traverseControlFlowPaths(branchPositions, 0, new boolean[branchPositions.size()], method, executingMethods, new ArrayList<>());
+                traverseControlFlowPaths(branchPositions, jumpPositions, 0, new boolean[branchPositions.size()], method, executingMethods, branchExecutedMethods, branchDecisions);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
 
-    private static void traverseControlFlowPaths(List<Integer> branchPositions, int currentIndex, boolean[] path, CtMethod method, List<String> executingMethods, List<Boolean> branchDecisions) {
+
+    private static void traverseControlFlowPaths(List<Integer> branchPositions, List<Integer> jumpPositions, int currentIndex, boolean[] path, CtMethod method, List<String> executingMethods, List<List<String>> branchExecutedMethods, List<Boolean> branchDecisions) throws CannotCompileException {
         if (currentIndex == branchPositions.size()) {
-            printControlFlowPath(path, method, executingMethods, branchDecisions);
+            printControlFlowPath(path, method, executingMethods, branchExecutedMethods, branchDecisions);
             return;
         }
 
         // Traverse the 'true' branch
         path[currentIndex] = true;
         branchDecisions.add(true);
-        traverseControlFlowPaths(branchPositions, currentIndex + 1, path, method, executingMethods, branchDecisions);
+        traverseControlFlowPaths(branchPositions, jumpPositions, currentIndex + 1, path, method, executingMethods, branchExecutedMethods, branchDecisions);
 
         // Traverse the 'false' branch
         path[currentIndex] = false;
         branchDecisions.set(currentIndex, false);
-        traverseControlFlowPaths(branchPositions, currentIndex + 1, path, method, executingMethods, branchDecisions);
+        traverseControlFlowPaths(branchPositions, jumpPositions, currentIndex + 1, path, method, executingMethods, branchExecutedMethods, branchDecisions);
 
         // Remove the last path entry if no further branches were traversed
         if (currentIndex == branchPositions.size() - 1 && executingMethods.size() > branchPositions.size()) {
@@ -113,7 +121,9 @@ public class LoggingAgent {
         }
     }
 
-    private static void printControlFlowPath(boolean[] path, CtMethod method, List<String> executingMethods, List<Boolean> branchDecisions) {
+    private static void printControlFlowPath(boolean[] path, CtMethod method, List<String> executingMethods, List<List<String>> branchExecutedMethods, List<Boolean> branchDecisions) throws CannotCompileException {
+        executingMethods.remove("org.slf4j.Logger.info");
+        executingMethods.remove("java.util.Random.nextInt");
         StringBuilder sb = new StringBuilder();
         boolean first = true;
 
@@ -144,8 +154,13 @@ public class LoggingAgent {
                 } else {
                     first = false;
                 }
-
                 sb.append(chosenPath).append(" (").append(conditionalBranch).append(") > ").append("MethodName: ").append(executingMethod);
+
+                // Append executed methods for the current branch
+                List<String> executedMethods = branchExecutedMethods.get(i);
+                for (String executedMethod : executedMethods) {
+                    sb.append(" > ").append(executedMethod);
+                }
             }
         }
 
@@ -162,5 +177,4 @@ public class LoggingAgent {
             e.printStackTrace();
         }
     }
-
 }
